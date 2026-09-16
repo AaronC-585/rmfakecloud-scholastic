@@ -76,7 +76,7 @@ func writeHelpSections(b *bytes.Buffer) {
 			nav: []nav{
 				{"/connect", "Connect", "Pair a tablet with a one-time code"},
 				{"/documents", "My Files", "Browse and open documents"},
-				{"/profile", "Profile", "Password, passkeys, theme"},
+				{"/profile", "Profile", "Password, passkeys, devices, theme"},
 			},
 		},
 		{
@@ -199,9 +199,10 @@ func writeHelpSections(b *bytes.Buffer) {
 			bullets: []string{
 				"Change password from Profile.",
 				"Passkeys (when enabled): register a device authenticator while logged in; then you can sign in without typing a password.",
+				"Registered devices: tablets that paired with a Connect code are listed on Profile; you can re-issue a device token without a new code.",
 				"Themes: pick a shell style (for example reMarkable, Google Docs–like, iCloud–like, or desktop OS) and deploy a theme if you have permission.",
 			},
-			nav: []nav{{"/profile", "Profile", "Password, passkeys, theme"}},
+			nav: []nav{{"/profile", "Profile", "Password, passkeys, devices, theme"}},
 		},
 		{
 			id:    "admin",
@@ -382,6 +383,36 @@ func (app *ReactAppWrapper) pageProfile(c *gin.Context) {
 		}
 	}
 	b.WriteString(`</passkeys>`)
+
+	devices := []model.RegisteredDevice{}
+	if user != nil {
+		devices = append(devices, user.RegisteredDevices...)
+		sort.Slice(devices, func(i, j int) bool {
+			return devices[i].LastSeen.After(devices[j].LastSeen)
+		})
+	}
+	b.WriteString(`<devices>`)
+	for _, d := range devices {
+		modelLabel := d.Model
+		if modelLabel == "" {
+			modelLabel = d.DeviceDesc
+		}
+		if modelLabel == "" {
+			modelLabel = "Unknown"
+		}
+		lastSeen := ""
+		if !d.LastSeen.IsZero() {
+			lastSeen = d.LastSeen.Local().Format(time.RFC3339)
+		}
+		registered := ""
+		if !d.RegisteredAt.IsZero() {
+			registered = d.RegisteredAt.Local().Format(time.RFC3339)
+		}
+		fmt.Fprintf(&b, `<device id="%s" model="%s" desc="%s" last-seen="%s" registered="%s"/>`,
+			xmlAttr(d.DeviceID), xmlAttr(modelLabel), xmlAttr(d.DeviceDesc), xmlAttr(lastSeen), xmlAttr(registered))
+	}
+	b.WriteString(`</devices>`)
+
 	b.WriteString(`</profile></body>`)
 	writePageClose(&b)
 	app.renderPage(c, b.Bytes())

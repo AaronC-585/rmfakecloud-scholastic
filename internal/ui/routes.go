@@ -31,6 +31,7 @@ func (app *ReactAppWrapper) RegisterRoutes(router *gin.Engine) {
 	router.POST("/profile/theme", app.formProfileTheme)
 	router.POST("/profile/password", app.formProfilePassword)
 	router.POST("/profile/passkeys/:id/delete", app.formPasskeyDelete)
+	router.POST("/profile/devices/reissue", app.formReissueDevice)
 	router.GET("/documents", app.pageDocuments)
 	router.GET("/documents/:docid/thumb.svg", app.pageNotebookThumb)
 	router.GET("/documents/:docid/thumb.png", app.pageNotebookThumb)
@@ -101,6 +102,9 @@ func (app *ReactAppWrapper) RegisterRoutes(router *gin.Engine) {
 
 	auth.GET("newcode", app.newCode)
 	auth.GET("code", app.codeStatus)
+
+	auth.GET("devices", app.listRegisteredDevices)
+	auth.POST("devices/reissue", app.reissueRegisteredDevice)
 
 	auth.GET("passcode/resets", app.listPasscodeResets)
 	auth.POST("passcode/resets/:uuid/approve", app.approvePasscodeReset)

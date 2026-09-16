@@ -499,6 +499,48 @@
         </section>
       </xsl:if>
 
+      <section class="profile-devices" aria-labelledby="devices-heading">
+        <h2 id="devices-heading">Registered devices</h2>
+        <p class="muted">
+          Tablets appear here after they pair with a Connect code. You can re-issue a device token
+          without a new pairing code (web login required).
+        </p>
+        <xsl:choose>
+          <xsl:when test="devices/device">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th scope="col">Model</th>
+                  <th scope="col">Serial</th>
+                  <th scope="col">Last seen</th>
+                  <th scope="col">Registered</th>
+                  <th scope="col"><span class="visually-hidden">Actions</span></th>
+                </tr>
+              </thead>
+              <tbody>
+                <xsl:for-each select="devices/device">
+                  <tr>
+                    <td><xsl:value-of select="@model"/></td>
+                    <td><code class="device-serial"><xsl:value-of select="@id"/></code></td>
+                    <td><xsl:value-of select="@last-seen"/></td>
+                    <td><xsl:value-of select="@registered"/></td>
+                    <td>
+                      <form method="post" action="/profile/devices/reissue" class="inline-form">
+                        <input type="hidden" name="deviceId" value="{@id}"/>
+                        <button type="submit" class="btn btn-secondary btn-sm">Re-issue token</button>
+                      </form>
+                    </td>
+                  </tr>
+                </xsl:for-each>
+              </tbody>
+            </table>
+          </xsl:when>
+          <xsl:otherwise>
+            <p class="muted">No registered devices yet. Pair once from Connect to appear here.</p>
+          </xsl:otherwise>
+        </xsl:choose>
+      </section>
+
       <section class="profile-password" aria-labelledby="password-heading">
         <h2 id="password-heading">Change password</h2>
         <form method="post" action="/profile/password" class="password-form" autocomplete="off">
@@ -515,6 +557,33 @@
           </div>
         </form>
       </section>
+    </article>
+  </xsl:template>
+
+  <!-- device token result (after re-issue) -->
+  <xsl:template match="device-token">
+    <article class="panel device-token-panel">
+      <h1>Device token</h1>
+      <p>
+        New token for
+        <strong>
+          <xsl:choose>
+            <xsl:when test="@model != ''"><xsl:value-of select="@model"/></xsl:when>
+            <xsl:when test="@device-desc != ''"><xsl:value-of select="@device-desc"/></xsl:when>
+            <xsl:otherwise><xsl:value-of select="@device-id"/></xsl:otherwise>
+          </xsl:choose>
+        </strong>
+        (<code class="device-serial"><xsl:value-of select="@device-id"/></code>).
+        Same kind of token as after pairing — use on the tablet only if your client lets you paste or replace the stored token.
+      </p>
+      <div class="field">
+        <label for="device-token-value">Token</label>
+        <textarea id="device-token-value" class="device-token-value" rows="8" readonly="readonly"><xsl:value-of select="token"/></textarea>
+      </div>
+      <div class="form-actions">
+        <button type="button" class="btn btn-secondary" id="device-token-copy">Copy</button>
+        <a class="btn btn-primary" href="/profile">Back to Profile</a>
+      </div>
     </article>
   </xsl:template>
 
@@ -1540,6 +1609,9 @@
           <script src="/assets/js/vendor/simplewebauthn-browser.umd.min.js" defer="defer"></script>
           <script src="/assets/js/webauthn.js" defer="defer"></script>
         </xsl:if>
+      </xsl:when>
+      <xsl:when test="$kind = 'device-token'">
+        <script src="/assets/js/device-token.js" defer="defer"></script>
       </xsl:when>
       <xsl:when test="$kind = 'connect'">
         <script src="/assets/js/connect.js" defer="defer"></script>

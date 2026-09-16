@@ -2238,3 +2238,18 @@ body.has-js-shell .site-header,
 .site-header[hidden] {
   display: none !important;
 }
+
+.profile-devices {
+  margin-top: 2rem;
+}
+.device-serial {
+  font-size: 0.85em;
+  word-break: break-all;
+}
+.device-token-panel .device-token-value {
+  width: 100%;
+  max-width: 48rem;
+  font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
+  font-size: 0.8rem;
+  line-height: 1.35;
+}

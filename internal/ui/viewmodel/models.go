@@ -45,6 +45,35 @@ type ChangeEmailForm struct {
 	CurrentPassword string `json:"currentPassword"`
 }
 
+// RegisteredDeviceEntry is a safe JSON view of a paired tablet (no secrets).
+type RegisteredDeviceEntry struct {
+	DeviceID     string `json:"deviceId"`
+	DeviceDesc   string `json:"deviceDesc"`
+	DeviceLink   string `json:"deviceLink,omitempty"`
+	Make         string `json:"make,omitempty"`
+	Model        string `json:"model,omitempty"`
+	Year         string `json:"year,omitempty"`
+	RegisteredAt string `json:"registeredAt,omitempty"`
+	LastSeen     string `json:"lastSeen,omitempty"`
+}
+
+// RegisteredDevicesResponse lists devices for the logged-in user.
+type RegisteredDevicesResponse struct {
+	Devices []RegisteredDeviceEntry `json:"devices"`
+}
+
+// ReissueDeviceRequest asks for a new device JWT without a pairing code (web session only).
+type ReissueDeviceRequest struct {
+	DeviceID   string `json:"deviceId" binding:"required"`
+	DeviceDesc string `json:"deviceDesc"`
+	DeviceLink string `json:"deviceLink,omitempty"`
+}
+
+// ReissueDeviceResponse returns the raw device token for the tablet.
+type ReissueDeviceResponse struct {
+	Token string `json:"token"`
+}
+
 // ErrorResponse
 type ErrorResponse struct {
 	Error string `json:"error"`

@@ -1,7 +1,9 @@
 package ui
 
 import (
+	"bytes"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/url"
 	"path"
@@ -176,6 +178,63 @@ func (app *ReactAppWrapper) formPasskeyDelete(c *gin.Context) {
 		return
 	}
 	redirectFlash(c, "/profile", "success", "Passkey deleted")
+}
+
+func (app *ReactAppWrapper) formReissueDevice(c *gin.Context) {
+	u := app.requirePageUser(c)
+	if u == nil {
+		return
+	}
+	if app.issueDeviceToken == nil {
+		redirectFlash(c, "/profile", "error", "Device token signing not configured")
+		return
+	}
+	deviceID := strings.TrimSpace(c.PostForm("deviceId"))
+	if deviceID == "" {
+		redirectFlash(c, "/profile", "error", "Device id required")
+		return
+	}
+	user, err := app.userStorer.GetUser(u.ID)
+	if err != nil || user == nil {
+		redirectFlash(c, "/profile", "error", "User not found")
+		return
+	}
+	reg, ok := user.GetRegisteredDevice(deviceID)
+	if !ok {
+		redirectFlash(c, "/profile", "error", "Device not registered")
+		return
+	}
+	token, err := app.issueDeviceToken(u.ID, deviceID, reg.DeviceDesc)
+	if err != nil {
+		log.Error(err)
+		redirectFlash(c, "/profile", "error", "Could not issue device token")
+		return
+	}
+	user.UpsertRegisteredDevice(deviceID, reg.DeviceDesc, reg.DeviceLink)
+	if err := app.userStorer.UpdateUser(user); err != nil {
+		log.Warn("reissue device persist: ", err)
+	}
+
+	_, css, chrome, _ := app.loadUserTheme(c, u)
+	var b bytes.Buffer
+	writePageOpen(&b, "device-token", "Device token — rmfakecloud", "/profile", chrome, css, u, "", "", defaultNav("/profile", u.Admin))
+	b.WriteString(`<body><device-token`)
+	fmt.Fprintf(&b, ` device-id="%s" device-desc="%s" model="%s">`,
+		xmlAttr(reg.DeviceID), xmlAttr(reg.DeviceDesc), xmlAttr(deviceModelLabel(reg)))
+	fmt.Fprintf(&b, `<token>%s</token>`, esc(token))
+	b.WriteString(`</device-token></body>`)
+	writePageClose(&b)
+	app.renderPage(c, b.Bytes())
+}
+
+func deviceModelLabel(d model.RegisteredDevice) string {
+	if strings.TrimSpace(d.Model) != "" {
+		return d.Model
+	}
+	if strings.TrimSpace(d.DeviceDesc) != "" {
+		return d.DeviceDesc
+	}
+	return "Unknown"
 }
 
 func (app *ReactAppWrapper) formUploadDocument(c *gin.Context) {

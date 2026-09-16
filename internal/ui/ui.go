@@ -78,6 +78,9 @@ type mqttBridge interface {
 	HasConnectedClient(userID string) bool
 }
 
+// DeviceTokenIssuer signs a device API JWT (same claims as POST /token/json/2/device/new).
+type DeviceTokenIssuer func(uid, deviceID, deviceDesc string) (token string, err error)
+
 // ReactAppWrapper encapsulates the web UI (XML/XSLT pages + JSON APIs).
 type ReactAppWrapper struct {
 	fs               http.FileSystem
@@ -88,6 +91,7 @@ type ReactAppWrapper struct {
 	h                *hub.Hub
 	passcodeStore    passcodestore.Store
 	backends         map[common.SyncVersion]backend
+	issueDeviceToken DeviceTokenIssuer
 	roomManager      *screenshare.RoomManager
 	mqtt             mqttBridge
 	webAuthn         *webauthn.WebAuthn
@@ -103,6 +107,7 @@ func New(cfg *config.Config,
 	pcStore passcodestore.Store,
 	docHandler documentHandler,
 	blobHandler blobHandler,
+	issueDeviceToken DeviceTokenIssuer,
 	roomManager *screenshare.RoomManager,
 	mqttBroker mqttBridge) *ReactAppWrapper {
 
@@ -115,12 +120,13 @@ func New(cfg *config.Config,
 		hub:             h,
 	}
 	staticWrapper := &ReactAppWrapper{
-		prefix:        "/assets",
-		cfg:           cfg,
-		userStorer:    userStorer,
-		codeConnector: codeConnector,
-		h:             h,
-		passcodeStore: pcStore,
+		prefix:           "/assets",
+		cfg:              cfg,
+		userStorer:       userStorer,
+		codeConnector:    codeConnector,
+		h:                h,
+		passcodeStore:    pcStore,
+		issueDeviceToken: issueDeviceToken,
 		backends: map[common.SyncVersion]backend{
 			common.Sync10: backend10,
 			common.Sync15: backend15,
