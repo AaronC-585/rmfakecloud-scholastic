@@ -608,13 +608,125 @@
     var uploadBtn = document.getElementById("rm-upload-toggle");
     var fileInput = document.getElementById("doc-upload");
     var uploadForm = document.getElementById("rm-upload-form");
+    var dropOverlay = document.getElementById("rm-drop-overlay");
+    var panel = document.querySelector(".rm-files");
+    var uploadBusy = false;
+    var dragDepth = 0;
+
+    function uploadParentId() {
+      if (uploadForm) {
+        var hid = uploadForm.querySelector('input[name="parent"]');
+        if (hid && hid.value) return hid.value;
+      }
+      return activeFolderId();
+    }
+
+    function normalizeUploadFile(f) {
+      if (!f || !f.name) return f;
+      var parts = f.name.split(".");
+      if (parts.length < 2) return f;
+      var ext = parts.pop().toLowerCase();
+      parts.push(ext);
+      var name = parts.join(".");
+      if (name === f.name) return f;
+      try {
+        return new File([f], name, { type: f.type });
+      } catch (_) {
+        return f;
+      }
+    }
+
+    function setDropOverlay(on) {
+      var panel = document.querySelector(".rm-files");
+      if (panel) panel.classList.toggle("is-dragover", !!on);
+      if (!dropOverlay) return;
+      if (on) dropOverlay.removeAttribute("hidden");
+      else dropOverlay.setAttribute("hidden", "hidden");
+    }
+
+    function uploadFiles(fileList) {
+      if (!fileList || !fileList.length || uploadBusy) return Promise.resolve();
+      var files = Array.prototype.slice.call(fileList).filter(Boolean);
+      if (!files.length) return Promise.resolve();
+      uploadBusy = true;
+      var panel = document.querySelector(".rm-files");
+      if (panel) panel.classList.add("is-uploading");
+      var formData = new FormData();
+      formData.append("parent", uploadParentId() || "root");
+      files.forEach(function (f) {
+        formData.append("file", normalizeUploadFile(f));
+      });
+      return fetch("/ui/api/documents/upload", {
+        method: "POST",
+        credentials: "same-origin",
+        body: formData,
+      })
+        .then(function (r) {
+          return r.json().catch(function () {
+            return {};
+          }).then(function (body) {
+            if (!r.ok) {
+              var msg = (body && body.error) || r.statusText || "Upload failed";
+              throw new Error(msg);
+            }
+            return body;
+          });
+        })
+        .then(function () {
+          return refreshAccountWide();
+        })
+        .catch(function (err) {
+          console.error("[upload]", err);
+          window.alert(err && err.message ? err.message : "Upload failed");
+        })
+        .finally(function () {
+          uploadBusy = false;
+          if (panel) panel.classList.remove("is-uploading");
+          if (fileInput) fileInput.value = "";
+        });
+    }
+
     if (uploadBtn && fileInput) {
       uploadBtn.addEventListener("click", function () {
         closeAddMenu();
         fileInput.click();
       });
       fileInput.addEventListener("change", function () {
-        if (fileInput.files && fileInput.files.length && uploadForm) uploadForm.submit();
+        if (fileInput.files && fileInput.files.length) uploadFiles(fileInput.files);
+      });
+    }
+
+    function isFileDrag(ev) {
+      var dt = ev.dataTransfer;
+      if (!dt || !dt.types) return false;
+      if (typeof dt.types.contains === "function") return dt.types.contains("Files");
+      return Array.prototype.indexOf.call(dt.types, "Files") !== -1;
+    }
+
+    if (panel && !isTemplatesAdmin()) {
+      panel.addEventListener("dragenter", function (ev) {
+        if (!isFileDrag(ev)) return;
+        ev.preventDefault();
+        dragDepth += 1;
+        setDropOverlay(true);
+      });
+      panel.addEventListener("dragover", function (ev) {
+        if (!isFileDrag(ev)) return;
+        ev.preventDefault();
+        if (ev.dataTransfer) ev.dataTransfer.dropEffect = "copy";
+      });
+      panel.addEventListener("dragleave", function (ev) {
+        if (!isFileDrag(ev)) return;
+        dragDepth = Math.max(0, dragDepth - 1);
+        if (dragDepth === 0) setDropOverlay(false);
+      });
+      panel.addEventListener("drop", function (ev) {
+        if (!isFileDrag(ev)) return;
+        ev.preventDefault();
+        dragDepth = 0;
+        setDropOverlay(false);
+        var files = ev.dataTransfer && ev.dataTransfer.files;
+        if (files && files.length) uploadFiles(files);
       });
     }
 
@@ -645,7 +757,6 @@
       });
     }
 
-    var panel = document.querySelector(".rm-files");
     if (panel) {
       panel.addEventListener("click", function (ev) {
         if (!selectMode) return;
