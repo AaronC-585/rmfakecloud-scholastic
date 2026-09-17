@@ -705,12 +705,33 @@ textarea {
 .rm-files-crumb a {
   color: inherit;
 }
-.rm-files-sort label {
+.rm-files-sort {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.65rem 1rem;
+  justify-content: flex-end;
+}
+.rm-files-sort > label[for="rm-sort"] {
   position: absolute;
   width: 1px;
   height: 1px;
   overflow: hidden;
   clip: rect(0, 0, 0, 0);
+}
+.rm-folders-on-top {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.9rem;
+  color: var(--rm-fg-2);
+  cursor: pointer;
+  user-select: none;
+  white-space: nowrap;
+}
+.rm-folders-on-top input {
+  margin: 0;
+  accent-color: var(--rm-action);
 }
 .rm-files-sort-control {
   position: relative;
@@ -727,6 +748,7 @@ textarea {
   font-size: 0.95rem;
   padding: 0.35rem 1.45rem 0.35rem 0;
   cursor: pointer;
+  max-width: min(16rem, 55vw);
 }
 .rm-files-sort-chevron {
   position: absolute;

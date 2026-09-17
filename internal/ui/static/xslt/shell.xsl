@@ -639,14 +639,28 @@
         <div class="rm-files-sort">
           <label for="rm-sort">Sort</label>
           <div class="rm-files-sort-control">
-            <select id="rm-sort">
-              <option value="modified" selected="selected">Last modified</option>
-              <option value="name">Name</option>
+            <select id="rm-sort" aria-label="Sort files and folders">
+              <option value="name-asc">Name (A–Z)</option>
+              <option value="name-desc">Name (Z–A)</option>
+              <option value="modified-desc" selected="selected">Date modified (newest)</option>
+              <option value="modified-asc">Date modified (oldest)</option>
+              <option value="type-asc">Type (A–Z)</option>
+              <option value="type-desc">Type (Z–A)</option>
+              <option value="pages-desc">Pages (most)</option>
+              <option value="pages-asc">Pages (least)</option>
+              <option value="size-desc">Size (largest)</option>
+              <option value="size-asc">Size (smallest)</option>
+              <option value="favorites-first">Favorites first</option>
+              <option value="favorites-last">Favorites last</option>
             </select>
             <svg class="rm-files-sort-chevron" viewBox="0 0 12 8" width="12" height="8" aria-hidden="true" focusable="false">
               <path fill="currentColor" d="M1.2 1.5 6 6.3l4.8-4.8L12 2.7 6 8.7 0 2.7z"/>
             </svg>
           </div>
+          <label class="rm-folders-on-top" for="rm-folders-on-top">
+            <input id="rm-folders-on-top" type="checkbox" checked="checked"/>
+            Folders on top
+          </label>
         </div>
       </header>
 
@@ -658,7 +672,7 @@
       <section class="rm-folder-cluster" aria-label="Folders">
         <ul class="rm-folder-grid">
           <xsl:for-each select="folders/folder">
-            <li class="rm-folder-item" data-id="{@id}" data-name="{@name}" data-modified="{@modified}" data-empty="{@empty}" data-pinned="{@pinned}">
+            <li class="rm-folder-item" data-id="{@id}" data-name="{@name}" data-modified="{@modified}" data-empty="{@empty}" data-pinned="{@pinned}" data-type="folder" data-pages="0" data-size="0">
               <label class="rm-item-check">
                 <input type="checkbox" class="rm-select-box" value="{@id}" data-kind="folder" data-name="{@name}" data-pinned="{@pinned}" aria-label="Select {@name}"/>
               </label>
@@ -688,7 +702,7 @@
       <section class="rm-file-cluster" aria-label="Notebooks and documents">
         <ul class="rm-file-grid">
           <xsl:for-each select="files/doc">
-            <li class="rm-file-item" data-id="{@id}" data-name="{@name}" data-modified="{@modified}" data-type="{@type}" data-pinned="{@pinned}">
+            <li class="rm-file-item" data-id="{@id}" data-name="{@name}" data-modified="{@modified}" data-type="{@type}" data-pinned="{@pinned}" data-pages="{@pages}" data-size="{@size}">
               <label class="rm-item-check">
                 <input type="checkbox" class="rm-select-box" value="{@id}" data-kind="file" data-name="{@name}" data-pinned="{@pinned}" aria-label="Select {@name}"/>
               </label>

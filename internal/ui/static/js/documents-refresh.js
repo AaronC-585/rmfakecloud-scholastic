@@ -5,6 +5,8 @@
   "use strict";
 
   var INTERVAL_MS = 15000;
+  var SORT_STORAGE_KEY = "rm-files-sort";
+  var FOLDERS_ON_TOP_KEY = "rm-files-folders-on-top";
   var lastSnap = "";
   var lastTree = null;
   var PDFJS_CDN = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
@@ -135,6 +137,9 @@
       li.setAttribute("data-modified", e.lastModified || "");
       li.setAttribute("data-empty", filled ? "false" : "true");
       li.setAttribute("data-pinned", e.pinned || e.Pinned ? "true" : "false");
+      li.setAttribute("data-type", "folder");
+      li.setAttribute("data-pages", "0");
+      li.setAttribute("data-size", "0");
       var check = document.createElement("label");
       check.className = "rm-item-check";
       var box = document.createElement("input");
@@ -175,6 +180,9 @@
       li.setAttribute("data-name", e.name || "");
       li.setAttribute("data-modified", e.lastModified || "");
       li.setAttribute("data-type", t);
+      li.setAttribute("data-pages", String(e.pageCount || e.PageCount || 0));
+      li.setAttribute("data-size", String(e.size || e.Size || 0));
+      li.setAttribute("data-pinned", e.pinned || e.Pinned ? "true" : "false");
       var check = document.createElement("label");
       check.className = "rm-item-check";
       var box = document.createElement("input");
@@ -193,7 +201,6 @@
       var frame = document.createElement("span");
       frame.className = "rm-page-frame is-" + t;
       frame.setAttribute("data-label", formatBadge(e));
-      li.setAttribute("data-pinned", e.pinned || e.Pinned ? "true" : "false");
       var page = thumbPage(e);
       var writings = !!(e.hasWritings || e.HasWritings);
       if ((t === "pdf" || t === "epub") && writings) {
@@ -294,14 +301,89 @@
 
   function applySort() {
     var sel = document.getElementById("rm-sort");
-    var mode = sel ? sel.value : "modified";
+    var mode = sel ? sel.value : "modified-desc";
+    // Migrate legacy values
+    if (mode === "modified") mode = "modified-desc";
+    if (mode === "name") mode = "name-asc";
+    try {
+      localStorage.setItem(SORT_STORAGE_KEY, mode);
+    } catch (_) {}
+    if (sel && sel.value !== mode) sel.value = mode;
+
+    function nameOf(el) {
+      return el.getAttribute("data-name") || "";
+    }
+    function modifiedOf(el) {
+      return el.getAttribute("data-modified") || "";
+    }
+    function typeOf(el) {
+      return (el.getAttribute("data-type") || "").toLowerCase();
+    }
+    function pagesOf(el) {
+      var n = parseInt(el.getAttribute("data-pages") || "0", 10);
+      return isNaN(n) ? 0 : n;
+    }
+    function sizeOf(el) {
+      var n = parseInt(el.getAttribute("data-size") || "0", 10);
+      return isNaN(n) ? 0 : n;
+    }
+    function pinnedOf(el) {
+      return el.getAttribute("data-pinned") === "true" ? 1 : 0;
+    }
+    function cmpName(a, b) {
+      return nameOf(a).localeCompare(nameOf(b), undefined, { sensitivity: "base", numeric: true });
+    }
     function cmp(a, b) {
-      if (mode === "name") {
-        return (a.getAttribute("data-name") || "").localeCompare(b.getAttribute("data-name") || "", undefined, {
-          sensitivity: "base",
-        });
+      var c = 0;
+      switch (mode) {
+        case "name-asc":
+          c = cmpName(a, b);
+          break;
+        case "name-desc":
+          c = cmpName(b, a);
+          break;
+        case "modified-asc":
+          c = String(modifiedOf(a)).localeCompare(String(modifiedOf(b)));
+          break;
+        case "modified-desc":
+          c = String(modifiedOf(b)).localeCompare(String(modifiedOf(a)));
+          break;
+        case "type-asc":
+          c = typeOf(a).localeCompare(typeOf(b));
+          if (!c) c = cmpName(a, b);
+          break;
+        case "type-desc":
+          c = typeOf(b).localeCompare(typeOf(a));
+          if (!c) c = cmpName(a, b);
+          break;
+        case "pages-asc":
+          c = pagesOf(a) - pagesOf(b);
+          if (!c) c = cmpName(a, b);
+          break;
+        case "pages-desc":
+          c = pagesOf(b) - pagesOf(a);
+          if (!c) c = cmpName(a, b);
+          break;
+        case "size-asc":
+          c = sizeOf(a) - sizeOf(b);
+          if (!c) c = cmpName(a, b);
+          break;
+        case "size-desc":
+          c = sizeOf(b) - sizeOf(a);
+          if (!c) c = cmpName(a, b);
+          break;
+        case "favorites-first":
+          c = pinnedOf(b) - pinnedOf(a);
+          if (!c) c = cmpName(a, b);
+          break;
+        case "favorites-last":
+          c = pinnedOf(a) - pinnedOf(b);
+          if (!c) c = cmpName(a, b);
+          break;
+        default:
+          c = String(modifiedOf(b)).localeCompare(String(modifiedOf(a)));
       }
-      return String(b.getAttribute("data-modified") || "").localeCompare(String(a.getAttribute("data-modified") || ""));
+      return c;
     }
     [".rm-folder-grid", ".rm-file-grid"].forEach(function (selGrid) {
       var ul = document.querySelector(selGrid);
@@ -312,6 +394,69 @@
         ul.appendChild(it);
       });
     });
+  }
+
+  function restoreSortPreference() {
+    var sel = document.getElementById("rm-sort");
+    if (!sel) return;
+    var mode = "modified-desc";
+    try {
+      var stored = localStorage.getItem(SORT_STORAGE_KEY) || "";
+      if (stored === "modified") stored = "modified-desc";
+      if (stored === "name") stored = "name-asc";
+      if (stored) mode = stored;
+    } catch (_) {}
+    var ok = false;
+    Array.prototype.forEach.call(sel.options, function (o) {
+      if (o.value === mode) ok = true;
+    });
+    if (!ok) mode = "modified-desc";
+    sel.value = mode;
+  }
+
+  function foldersOnTopEnabled() {
+    var box = document.getElementById("rm-folders-on-top");
+    if (box) return !!box.checked;
+    try {
+      var v = localStorage.getItem(FOLDERS_ON_TOP_KEY);
+      if (v === "0" || v === "false") return false;
+    } catch (_) {}
+    return true;
+  }
+
+  function applyFoldersOnTop() {
+    var box = document.getElementById("rm-folders-on-top");
+    var onTop = foldersOnTopEnabled();
+    if (box) box.checked = onTop;
+    try {
+      localStorage.setItem(FOLDERS_ON_TOP_KEY, onTop ? "1" : "0");
+    } catch (_) {}
+    var panel = document.querySelector(".page-documents .rm-files") || document.querySelector(".rm-files");
+    if (!panel) return;
+    var folders = panel.querySelector(".rm-folder-cluster");
+    var files = panel.querySelector(".rm-file-cluster");
+    if (!folders || !files || !folders.parentNode) return;
+    if (onTop) {
+      if (folders.nextElementSibling !== files) {
+        folders.parentNode.insertBefore(folders, files);
+      }
+    } else if (files.nextElementSibling !== folders) {
+      folders.parentNode.insertBefore(files, folders);
+    }
+    panel.classList.toggle("folders-on-top", onTop);
+    panel.classList.toggle("folders-below", !onTop);
+  }
+
+  function restoreFoldersOnTopPreference() {
+    var box = document.getElementById("rm-folders-on-top");
+    if (!box) return;
+    var onTop = true;
+    try {
+      var v = localStorage.getItem(FOLDERS_ON_TOP_KEY);
+      if (v === "0" || v === "false") onTop = false;
+    } catch (_) {}
+    box.checked = onTop;
+    applyFoldersOnTop();
   }
 
   function applySearch() {
@@ -750,6 +895,11 @@
     var sort = document.getElementById("rm-sort");
     if (sort) sort.addEventListener("change", applySort);
 
+    var foldersOnTop = document.getElementById("rm-folders-on-top");
+    if (foldersOnTop) {
+      foldersOnTop.addEventListener("change", applyFoldersOnTop);
+    }
+
     var selectBtn = document.getElementById("rm-select-toggle");
     if (selectBtn) {
       selectBtn.addEventListener("click", function () {
@@ -1067,6 +1217,7 @@
       if (folderUl) renderFolders(folderUl, parts.folders);
       if (fileUl) renderFiles(fileUl, parts.files);
       applySort();
+      applyFoldersOnTop();
       applySearch();
       observeThumbs();
       updateSelectBar();
@@ -1080,6 +1231,8 @@
       return;
     }
     wireChrome();
+    restoreSortPreference();
+    restoreFoldersOnTopPreference();
     applySort();
     observeThumbs();
     updateSelectBar();

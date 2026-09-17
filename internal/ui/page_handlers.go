@@ -106,7 +106,8 @@ func writeHelpSections(b *bytes.Buffer) {
 				"Subtitles show page progress (Page N of M) when page counts are available.",
 				"Use Search, +, and Select from the dock at the bottom of My Files. The + menu offers Add folder and Upload.",
 				"Select mode lets you rename one item, move or delete one or many, and toggle favorites (★).",
-				"Favorites (stars) sort ahead of other items in the same folder.",
+				"Use the Sort menu for name, date modified, type, pages, size, or favorites-first / favorites-last order (remembered in this browser).",
+				"Folders on top keeps folder rows above documents; turn it off to place folders below.",
 			},
 			paras: []string{
 				"Opening a document uses the in-browser viewer for that type. Downloading a PDF or EPUB uses the Download link on the viewer (or export from the API). Notebooks are shown as vector pages in the browser; PDF export of a notebook is only via Download PDF, not as the on-screen viewer.",
@@ -470,10 +471,10 @@ func (app *ReactAppWrapper) pageDocuments(c *gin.Context) {
 			pin = "true"
 		}
 		kind := normalizeDocType(d.DocumentType)
-		fmt.Fprintf(&b, `<doc id="%s" name="%s" type="%s" label="%s" writings="%s" pages="%d" page="%d" thumb-page="%d" pinned="%s" modified="%s"/>`,
+		fmt.Fprintf(&b, `<doc id="%s" name="%s" type="%s" label="%s" writings="%s" pages="%d" page="%d" thumb-page="%d" pinned="%s" size="%d" modified="%s"/>`,
 			xmlAttr(d.ID), xmlAttr(d.Name), xmlAttr(kind), xmlAttr(docFormatLabel(d.FormatLabel, kind)),
 			writingsAttr(d.HasWritings),
-			d.PageCount, d.CurrentPage, models.ThumbPage1(d.CurrentPage, d.PageCount), pin, xmlAttr(d.LastModified.Format(time.RFC3339)))
+			d.PageCount, d.CurrentPage, models.ThumbPage1(d.CurrentPage, d.PageCount), pin, d.Size, xmlAttr(d.LastModified.Format(time.RFC3339)))
 	}
 	b.WriteString(`</files></documents></body>`)
 	writePageClose(&b)
