@@ -5,6 +5,7 @@
   var DEBOUNCE_MS = 400;
   var cssXsl = null;
   var timer = null;
+  var syncing = false;
 
   function parseXMLString(xmlString) {
     return new DOMParser().parseFromString(xmlString, "application/xml");
@@ -35,6 +36,56 @@
       document.head.appendChild(el);
     }
     el.textContent = cssText || "";
+  }
+
+  function colorInputs() {
+    return Array.prototype.slice.call(document.querySelectorAll(".theme-color-input"));
+  }
+
+  function syncPickersFromXML() {
+    var ta = document.getElementById("theme-xml");
+    if (!ta) return;
+    try {
+      var doc = parseXMLString(ta.value);
+      if (doc.querySelector("parsererror")) return;
+      var colors = doc.querySelector("colors");
+      if (!colors) return;
+      syncing = true;
+      colorInputs().forEach(function (input) {
+        var key = input.getAttribute("data-color-key");
+        if (!key) return;
+        var val = colors.getAttribute(key);
+        if (val && /^#[0-9A-Fa-f]{3,8}$/.test(val)) {
+          input.value = val.length === 4
+            ? "#" + val[1] + val[1] + val[2] + val[2] + val[3] + val[3]
+            : val;
+        }
+      });
+      syncing = false;
+    } catch (_) {
+      syncing = false;
+    }
+  }
+
+  function applyPickersToXML() {
+    var ta = document.getElementById("theme-xml");
+    if (!ta) return;
+    try {
+      var doc = parseXMLString(ta.value);
+      if (doc.querySelector("parsererror")) return;
+      var colors = doc.querySelector("colors");
+      if (!colors) return;
+      colorInputs().forEach(function (input) {
+        var key = input.getAttribute("data-color-key");
+        if (key && input.value) colors.setAttribute(key, input.value);
+      });
+      var serialized = new XMLSerializer().serializeToString(doc);
+      if (serialized && serialized !== ta.value) {
+        ta.value = serialized;
+      }
+    } catch (e) {
+      console.warn("[theme-studio] color sync failed", e);
+    }
   }
 
   function previewFromTextarea() {
@@ -70,7 +121,24 @@
       return;
     }
 
-    ta.addEventListener("input", schedulePreview);
+    syncPickersFromXML();
+    colorInputs().forEach(function (input) {
+      input.addEventListener("input", function () {
+        if (syncing) return;
+        applyPickersToXML();
+        schedulePreview();
+      });
+    });
+    ta.addEventListener("input", function () {
+      syncPickersFromXML();
+      schedulePreview();
+    });
+    var form = document.getElementById("theme-studio-form");
+    if (form) {
+      form.addEventListener("submit", function () {
+        applyPickersToXML();
+      });
+    }
     previewFromTextarea();
   }
 

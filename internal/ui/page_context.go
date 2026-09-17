@@ -17,6 +17,7 @@ import (
 type pageUser struct {
 	ID    string
 	Email string
+	Name  string
 	Admin bool
 }
 
@@ -36,7 +37,14 @@ func (app *ReactAppWrapper) optionalUser(c *gin.Context) *pageUser {
 			break
 		}
 	}
-	return &pageUser{ID: claims.UserID, Email: claims.Email, Admin: admin}
+	pu := &pageUser{ID: claims.UserID, Email: claims.Email, Admin: admin}
+	if mu := app.getModelUser(claims.UserID); mu != nil {
+		pu.Name = mu.Name
+		if mu.Email != "" {
+			pu.Email = mu.Email
+		}
+	}
+	return pu
 }
 
 func (app *ReactAppWrapper) requireThumbUser(c *gin.Context) *pageUser {
@@ -184,7 +192,8 @@ func writePageOpen(b *bytes.Buffer, kind, title, path, chrome, css string, u *pa
 		if u.Admin {
 			admin = "true"
 		}
-		fmt.Fprintf(b, `<user id="%s" email="%s" admin="%s"/>`, xmlAttr(u.ID), xmlAttr(u.Email), admin)
+		fmt.Fprintf(b, `<user id="%s" email="%s" name="%s" admin="%s"/>`,
+			xmlAttr(u.ID), xmlAttr(u.Email), xmlAttr(u.Name), admin)
 	}
 	if flashMsg != "" {
 		if flashType == "" {

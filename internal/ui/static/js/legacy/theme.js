@@ -73,15 +73,14 @@
       var tid = "default";
       var overrides = {};
       var factor = detectFormFactor();
-      var auth = global.useAuthState ? global.useAuthState() : null;
-      var user = auth && auth.state && auth.state.user;
-      if (user) {
-        try {
-          var pref = await global.apiService.getProfileTheme();
-          tid = pref.themeId || "default";
-          overrides = pref.themeColorOverrides || {};
-          if (pref.formFactor) factor = pref.formFactor;
-        } catch (_) {}
+      // Cookie-session pages often have no localStorage currentUser; still load profile theme.
+      try {
+        var pref = await global.apiService.getProfileTheme();
+        tid = pref.themeId || "default";
+        overrides = pref.themeColorOverrides || {};
+        if (pref.formFactor) factor = pref.formFactor;
+      } catch (_) {
+        // Not authenticated or API unavailable — keep defaults.
       }
       var theme = await global.apiService.getTheme(tid);
       if (detectFormFactor() === "mobile") factor = "mobile";
