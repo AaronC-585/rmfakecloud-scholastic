@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/antchfx/xmlquery"
 	"github.com/ddvk/rmfakecloud/internal/applog"
 	"github.com/ddvk/rmfakecloud/internal/common"
 	"github.com/ddvk/rmfakecloud/internal/model"
@@ -199,6 +200,7 @@ func writeHelpSections(b *bytes.Buffer) {
 			bullets: []string{
 				"Change password from Profile.",
 				"Passkeys (when enabled): register a device authenticator while logged in; then you can sign in without typing a password.",
+				"Passkeys only: after at least one passkey is registered, Profile can disable password login for the web UI.",
 				"Registered devices: tablets that paired with a Connect code are listed on Profile; you can re-issue a device token without a new code.",
 				"Themes: pick a shell style (for example reMarkable, Google Docs–like, iCloud–like, or desktop OS) and deploy a theme if you have permission.",
 			},
@@ -209,7 +211,7 @@ func writeHelpSections(b *bytes.Buffer) {
 			title: "Administration",
 			intro: "Administrators manage users, themes, and the synced template library.",
 			bullets: []string{
-				"Create and delete users from Admin.",
+				"Create and delete users from Admin; force or clear passkeys-only login per user when passkeys are registered.",
 				"Theme Studio edits shared themes and chrome layouts.",
 				"Templates: upload, rename, download, or delete synced templates and methods; preview built-in SVGs.",
 				"Server logs on the Admin page show recent in-memory log lines from this process (Refresh or wait for auto-update).",
@@ -320,9 +322,6 @@ func (app *ReactAppWrapper) pageProfile(c *gin.Context) {
 	if user != nil && user.ThemeID != "" {
 		selected = user.ThemeID
 	}
-	if selected == "default" {
-		selected = "dark"
-	}
 	var b bytes.Buffer
 	writePageOpen(&b, "profile", "Profile — rmfakecloud", "/profile", chrome, css, u, ft, fm, defaultNav("/profile", u.Admin))
 	b.WriteString(`<body><profile>`)
@@ -338,36 +337,21 @@ func (app *ReactAppWrapper) pageProfile(c *gin.Context) {
 		fmt.Fprintf(&b, `<theme id="%s" name="%s"%s/>`, xmlAttr(t.ID), xmlAttr(t.Name), sel)
 	}
 	b.WriteString(`</themes>`)
-	b.WriteString(`<overrides>`)
-	keys := []string{"background1", "background2", "foreground1", "foreground2", "action"}
-	overrides := map[string]string{}
-	if user != nil {
-		overrides = user.ThemeColorOverrides
-	}
-	for _, k := range keys {
-		v := "#212529"
-		if overrides != nil && overrides[k] != "" {
-			v = overrides[k]
-		} else {
-			switch k {
-			case "background2":
-				v = "#0f0f0f"
-			case "foreground1":
-				v = "#f8f7f6"
-			case "foreground2":
-				v = "#e8e3d9"
-			case "action":
-				v = "#EE7B30"
-			}
-		}
-		fmt.Fprintf(&b, `<color key="%s" value="%s"/>`, xmlAttr(k), xmlAttr(v))
-	}
-	b.WriteString(`</overrides>`)
 	enabled := "false"
 	if app.webAuthnEnabled() {
 		enabled = "true"
 	}
-	fmt.Fprintf(&b, `<passkeys enabled="%s">`, enabled)
+	passkeysOnly := "false"
+	hasCreds := "false"
+	if user != nil {
+		if user.PasskeysOnly {
+			passkeysOnly = "true"
+		}
+		if len(user.WebAuthnCredentials) > 0 {
+			hasCreds = "true"
+		}
+	}
+	fmt.Fprintf(&b, `<passkeys enabled="%s" passkeys-only="%s" has-credentials="%s">`, enabled, passkeysOnly, hasCreds)
 	if user != nil {
 		for _, cred := range user.WebAuthnCredentials {
 			name := cred.Name
@@ -864,13 +848,30 @@ func (app *ReactAppWrapper) pageAdmin(c *gin.Context) {
 	var b bytes.Buffer
 	writePageOpen(&b, "admin", "Admin — rmfakecloud", "/admin", chrome, css, u, ft, fm, defaultNav("/admin", u.Admin))
 	b.WriteString(`<body><admin>`)
+	webauthnOn := "false"
+	if app.webAuthnEnabled() {
+		webauthnOn = "true"
+	}
+	fmt.Fprintf(&b, `<settings webauthn="%s"/>`, webauthnOn)
 	for _, usr := range users {
 		admin := "false"
 		if usr.IsAdmin {
 			admin = "true"
 		}
-		fmt.Fprintf(&b, `<user id="%s" email="%s" name="%s" admin="%s"/>`,
-			xmlAttr(usr.ID), xmlAttr(usr.Email), xmlAttr(usr.Name), admin)
+		passkeysOnly := "false"
+		if usr.PasskeysOnly {
+			passkeysOnly = "true"
+		}
+		hasCreds := "false"
+		credCount := 0
+		if usr != nil {
+			credCount = len(usr.WebAuthnCredentials)
+			if credCount > 0 {
+				hasCreds = "true"
+			}
+		}
+		fmt.Fprintf(&b, `<user id="%s" email="%s" name="%s" admin="%s" passkeys-only="%s" has-credentials="%s" passkey-count="%d"/>`,
+			xmlAttr(usr.ID), xmlAttr(usr.Email), xmlAttr(usr.Name), admin, passkeysOnly, hasCreds, credCount)
 	}
 	b.WriteString(`<logs>`)
 	for _, line := range applog.Default().Texts(200) {
@@ -984,9 +985,40 @@ func (app *ReactAppWrapper) pageThemeStudio(c *gin.Context) {
 	}
 	fmt.Fprintf(&b, `<editor id="%s" name="%s" published="%s">%s</editor>`,
 		xmlAttr(editID), xmlAttr(editName), pub, xmlCDATA(string(editXML)))
+	writeThemeEditorColors(&b, editXML)
 	b.WriteString(`</themes-studio></body>`)
 	writePageClose(&b)
 	app.renderPage(c, b.Bytes())
+}
+
+func writeThemeEditorColors(b *bytes.Buffer, themeXML []byte) {
+	keys := []string{"background1", "background2", "foreground1", "foreground2", "foreground3", "action", "accept", "reject"}
+	defaults := map[string]string{
+		"background1": "#212529",
+		"background2": "#0f0f0f",
+		"foreground1": "#f8f7f6",
+		"foreground2": "#e8e3d9",
+		"foreground3": "#e4dbaf",
+		"action":      "#EE7B30",
+		"accept":      "#00e676",
+		"reject":      "#ff1744",
+	}
+	if len(themeXML) > 0 {
+		if doc, err := xmlquery.Parse(bytes.NewReader(themeXML)); err == nil {
+			if colors := xmlquery.FindOne(doc, "/theme/colors"); colors != nil {
+				for _, k := range keys {
+					if v := strings.TrimSpace(colors.SelectAttr(k)); v != "" {
+						defaults[k] = v
+					}
+				}
+			}
+		}
+	}
+	b.WriteString(`<overrides>`)
+	for _, k := range keys {
+		fmt.Fprintf(b, `<color key="%s" value="%s"/>`, xmlAttr(k), xmlAttr(defaults[k]))
+	}
+	b.WriteString(`</overrides>`)
 }
 
 func (app *ReactAppWrapper) pageScreenShare(c *gin.Context) {

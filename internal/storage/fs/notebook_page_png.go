@@ -100,7 +100,7 @@ func readDeviceThumbBytes(doc *models.HashDoc, ls *LocalBlobStorage, pageID stri
 	}
 	b, err := io.ReadAll(rc)
 	_ = rc.Close()
-	if err != nil || len(b) < 32 {
+	if err != nil || !validRasterImage(b) {
 		return nil
 	}
 	return b
@@ -168,7 +168,7 @@ func readPageImages(doc *models.HashDoc, ls *LocalBlobStorage, pageID string) ma
 		}
 		b, err := io.ReadAll(rc)
 		_ = rc.Close()
-		if err != nil || len(b) == 0 {
+		if err != nil || !validRasterImage(b) {
 			continue
 		}
 		out[path.Base(rel)] = b
@@ -180,24 +180,41 @@ func readPageImages(doc *models.HashDoc, ls *LocalBlobStorage, pageID string) ma
 }
 
 func exportNotebookPagePNGWithRmdecode(doc *models.HashDoc, ls *LocalBlobStorage, docid string, pageNum int) (png []byte, cacheable bool, err error) {
-	if pageID := pageIDForNum(doc, ls, docid, pageNum); pageID != "" {
-		if b := readDeviceThumbBytes(doc, ls, pageID); len(b) > 0 {
-			return b, true, nil
+	pageID := pageIDFromRmBlob(doc, ls, docid, pageNum)
+	images := filterValidPageImages(readPageImages(doc, ls, pageID))
+
+	// Prefer full .rm render when the page has validated inserted images so
+	// My Files / viewer don't stop at a device thumb that omits those PNGs.
+	if len(images) == 0 {
+		if id := pageIDForNum(doc, ls, docid, pageNum); id != "" {
+			if b := readDeviceThumbBytes(doc, ls, id); len(b) > 0 {
+				return b, true, nil
+			}
 		}
 	}
+
 	rmData, err := readPageRmBlob(doc, ls, docid, pageNum)
 	if err != nil {
 		return nil, false, err
 	}
 	if len(rmData) == 0 {
+		if len(images) == 1 {
+			for _, b := range images {
+				return b, true, nil
+			}
+		}
 		b, e := rmdecode.RenderNotebookPlaceholderPNG()
 		return b, false, e
 	}
-	pageID := pageIDFromRmBlob(doc, ls, docid, pageNum)
-	images := readPageImages(doc, ls, pageID)
 	b, err := rmdecode.EncodeRmPageToPNGWithImages(rmData, images)
 	if err != nil {
 		log.Warn("notebook page png: ", err)
+		// Last resort: a single valid sibling PNG is better than a blank placeholder.
+		if len(images) == 1 {
+			for _, img := range images {
+				return img, true, nil
+			}
+		}
 		ph, e := rmdecode.RenderNotebookPlaceholderPNG()
 		if e != nil {
 			return nil, false, err

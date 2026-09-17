@@ -122,7 +122,7 @@
         if (global.reloadShellTheme) global.reloadShellTheme();
         if (global.enhanceTablePagination) {
           global.enhanceTablePagination(".profile-panel .data-table");
-          global.enhanceTablePagination(".admin-panel .data-table");
+          global.enhanceTablePagination(".admin-panel .admin-users-table", { minRows: 10 });
           global.enhanceTablePagination(".integrations-panel .data-table");
           global.enhanceTablePagination(".themes-panel .data-table");
         }

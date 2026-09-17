@@ -128,6 +128,11 @@ func (app *ReactAppWrapper) login(c *gin.Context) {
 		return
 	}
 
+	if !user.PasswordLoginAllowed() {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, viewmodel.NewErrorResponse("This account uses passkeys only. Sign in with a passkey."))
+		return
+	}
+
 	if ok, err := user.CheckPassword(form.Password); err != nil || !ok {
 		if err != nil {
 			log.Error(err)
@@ -786,6 +791,9 @@ func (app *ReactAppWrapper) updateUser(c *gin.Context) {
 
 	if req.Email != "" {
 		user.Email = req.Email
+	}
+	if req.Name != "" {
+		user.Name = req.Name
 	}
 
 	err = app.userStorer.UpdateUser(user)

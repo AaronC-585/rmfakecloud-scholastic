@@ -56,6 +56,9 @@
         <xsl:if test="$isAdmin">
           <xsl:attribute name="data-admin">true</xsl:attribute>
         </xsl:if>
+        <xsl:if test="/page/user/@name != ''">
+          <xsl:attribute name="data-name"><xsl:value-of select="/page/user/@name"/></xsl:attribute>
+        </xsl:if>
         <xsl:if test="/page/user/@email != ''">
           <xsl:attribute name="data-email"><xsl:value-of select="/page/user/@email"/></xsl:attribute>
         </xsl:if>
@@ -178,14 +181,17 @@
     <details class="user-menu">
       <summary>
         <span class="icon icon-person" aria-hidden="true"/>
-        <xsl:choose>
-          <xsl:when test="/page/user/@email != ''">
-            <xsl:value-of select="/page/user/@email"/>
-          </xsl:when>
-          <xsl:otherwise>
-            <xsl:value-of select="/page/user/@id"/>
-          </xsl:otherwise>
-        </xsl:choose>
+        <span class="user-menu-name">
+          <xsl:choose>
+            <xsl:when test="/page/user/@name != ''">
+              <xsl:value-of select="/page/user/@name"/>
+            </xsl:when>
+            <xsl:when test="/page/user/@id != ''">
+              <xsl:value-of select="/page/user/@id"/>
+            </xsl:when>
+            <xsl:otherwise>Account</xsl:otherwise>
+          </xsl:choose>
+        </span>
       </summary>
       <ul class="user-menu-list">
         <li><a href="/profile">Profile</a></li>
@@ -218,7 +224,18 @@
   </xsl:template>
 
   <xsl:template match="home/p">
-    <p><xsl:value-of select="."/></p>
+    <p><xsl:apply-templates select="node()"/></p>
+  </xsl:template>
+
+  <xsl:template match="home/p/a">
+    <a>
+      <xsl:attribute name="href"><xsl:value-of select="@href"/></xsl:attribute>
+      <xsl:value-of select="."/>
+    </a>
+  </xsl:template>
+
+  <xsl:template match="home/p/text()">
+    <xsl:value-of select="."/>
   </xsl:template>
 
   <!-- help -->
@@ -428,28 +445,6 @@
                 </xsl:for-each>
               </select>
             </div>
-            <xsl:if test="overrides/color">
-              <fieldset class="color-overrides">
-                <legend>Personal color overrides</legend>
-                <xsl:for-each select="overrides/color">
-                  <div class="field field-inline">
-                    <label>
-                      <xsl:attribute name="for">
-                        <xsl:text>override-</xsl:text>
-                        <xsl:value-of select="@key"/>
-                      </xsl:attribute>
-                      <xsl:value-of select="@key"/>
-                    </label>
-                    <input type="color" name="override-{@key}" value="{@value}">
-                      <xsl:attribute name="id">
-                        <xsl:text>override-</xsl:text>
-                        <xsl:value-of select="@key"/>
-                      </xsl:attribute>
-                    </input>
-                  </div>
-                </xsl:for-each>
-              </fieldset>
-            </xsl:if>
             <div class="form-actions">
               <button type="submit" class="btn btn-primary">Deploy</button>
             </div>
@@ -491,6 +486,39 @@
               <button type="button" class="btn btn-secondary" id="passkey-register" data-action="passkey-register">
                 Register passkey
               </button>
+              <form method="post" action="/profile/passkeys-only" class="passkeys-only-form">
+                <fieldset class="passkeys-only-fieldset">
+                  <legend>Sign-in preference</legend>
+                  <div class="field field-checkbox">
+                    <input type="hidden" name="passkeysOnly" value="0"/>
+                    <input id="passkeys-only" type="checkbox" name="passkeysOnly" value="1">
+                      <xsl:if test="passkeys/@passkeys-only = 'true'">
+                        <xsl:attribute name="checked">checked</xsl:attribute>
+                      </xsl:if>
+                      <xsl:if test="passkeys/@has-credentials != 'true'">
+                        <xsl:attribute name="disabled">disabled</xsl:attribute>
+                      </xsl:if>
+                    </input>
+                    <label for="passkeys-only">Passkeys only (disable password login)</label>
+                  </div>
+                  <xsl:choose>
+                    <xsl:when test="passkeys/@has-credentials = 'true'">
+                      <p class="muted">When enabled, the web UI accepts passkeys only for this account. Tablet pairing is unchanged.</p>
+                    </xsl:when>
+                    <xsl:otherwise>
+                      <p class="muted">Register a passkey first to enable passkeys-only login.</p>
+                    </xsl:otherwise>
+                  </xsl:choose>
+                  <div class="form-actions">
+                    <button type="submit" class="btn btn-secondary" id="passkeys-only-save">
+                      <xsl:if test="passkeys/@has-credentials != 'true'">
+                        <xsl:attribute name="disabled">disabled</xsl:attribute>
+                      </xsl:if>
+                      Save sign-in preference
+                    </button>
+                  </div>
+                </fieldset>
+              </form>
             </xsl:when>
             <xsl:otherwise>
               <p class="muted">Passkeys are not enabled on this server.</p>
@@ -754,8 +782,12 @@
           <input type="hidden" name="parent" value="{@folder-id}"/>
         </xsl:if>
         <label for="doc-upload">Upload file</label>
-        <input id="doc-upload" type="file" name="file"/>
+        <input id="doc-upload" type="file" name="file" multiple="multiple"/>
       </form>
+
+      <div id="rm-drop-overlay" class="rm-drop-overlay" hidden="hidden" role="status" aria-live="polite">
+        Drop files to upload to this folder
+      </div>
 
       <dialog id="rm-folder-dialog" class="rm-folder-dialog">
         <form method="post" action="/documents/folder">
@@ -1087,15 +1119,18 @@
         <a class="btn btn-secondary" href="/admin/themes">Theme studio</a>
         <a class="btn btn-secondary" href="/admin/templates">Templates</a>
         <a class="btn btn-secondary" href="/admin/templates#rmethods">rMethods</a>
+        <button type="button" class="btn btn-primary" id="admin-new-user-open" aria-haspopup="dialog" aria-controls="admin-new-user-dialog">New user</button>
       </nav>
-      <table class="data-table">
+      <table class="data-table admin-users-table" id="admin-users-table">
         <thead>
           <tr>
             <th scope="col">User ID</th>
             <th scope="col">Email</th>
             <th scope="col">Name</th>
             <th scope="col">Admin</th>
-            <th scope="col"><span class="visually-hidden">Actions</span></th>
+            <th scope="col">Passkeys</th>
+            <th scope="col">Passkeys only</th>
+            <th scope="col">Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -1105,12 +1140,58 @@
               <td><xsl:value-of select="@email"/></td>
               <td><xsl:value-of select="@name"/></td>
               <td>
+                <form method="post" action="/admin/users/{@id}/admin" class="inline-form admin-toggle-form">
+                  <label class="gui-switch">
+                    <input type="checkbox" name="admin" value="1" aria-label="Admin for {@id}">
+                      <xsl:if test="@admin = 'true'">
+                        <xsl:attribute name="checked">checked</xsl:attribute>
+                      </xsl:if>
+                      <xsl:attribute name="onchange">this.form.requestSubmit()</xsl:attribute>
+                    </input>
+                    <span class="gui-switch-track" aria-hidden="true"><span class="gui-switch-thumb"/></span>
+                  </label>
+                </form>
+              </td>
+              <td><xsl:value-of select="@passkey-count"/></td>
+              <td>
                 <xsl:choose>
-                  <xsl:when test="@admin = 'true'">yes</xsl:when>
+                  <xsl:when test="@passkeys-only = 'true'">forced</xsl:when>
                   <xsl:otherwise>no</xsl:otherwise>
                 </xsl:choose>
               </td>
-              <td>
+              <td class="admin-user-actions">
+                <button
+                  type="button"
+                  class="btn btn-secondary btn-sm admin-edit-user-open"
+                  aria-haspopup="dialog"
+                  aria-controls="admin-edit-user-dialog"
+                  data-userid="{@id}"
+                  data-email="{@email}"
+                  data-name="{@name}">
+                  Edit
+                </button>
+                <xsl:if test="/page/body/admin/settings/@webauthn = 'true'">
+                  <xsl:choose>
+                    <xsl:when test="@passkeys-only = 'true'">
+                      <form method="post" action="/admin/users/{@id}/passkeys-only" class="inline-form">
+                        <input type="hidden" name="action" value="disable"/>
+                        <button type="submit" class="btn btn-secondary btn-sm">Allow password</button>
+                      </form>
+                    </xsl:when>
+                    <xsl:otherwise>
+                      <form method="post" action="/admin/users/{@id}/passkeys-only" class="inline-form">
+                        <input type="hidden" name="action" value="enable"/>
+                        <button type="submit" class="btn btn-secondary btn-sm">
+                          <xsl:if test="@has-credentials != 'true'">
+                            <xsl:attribute name="disabled">disabled</xsl:attribute>
+                            <xsl:attribute name="title">User has no passkeys</xsl:attribute>
+                          </xsl:if>
+                          Force passkeys only
+                        </button>
+                      </form>
+                    </xsl:otherwise>
+                  </xsl:choose>
+                </xsl:if>
                 <form method="post" action="/admin/users/{@id}/delete" class="inline-form">
                   <button type="submit" class="btn btn-danger btn-sm">Delete</button>
                 </form>
@@ -1118,14 +1199,14 @@
             </tr>
           </xsl:for-each>
           <xsl:if test="not(user)">
-            <tr><td colspan="5">No users.</td></tr>
+            <tr><td colspan="7">No users.</td></tr>
           </xsl:if>
         </tbody>
       </table>
 
-      <section class="create-user" aria-labelledby="new-user-heading">
-        <h2 id="new-user-heading">Create user</h2>
+      <dialog id="admin-new-user-dialog" class="admin-user-dialog" aria-labelledby="new-user-heading">
         <form method="post" action="/admin/users" class="user-form" autocomplete="off">
+          <h2 id="new-user-heading">Create user</h2>
           <div class="field">
             <label for="new-userid">User ID</label>
             <input id="new-userid" type="text" name="userid" required="required"/>
@@ -1140,9 +1221,32 @@
           </div>
           <div class="form-actions">
             <button type="submit" class="btn btn-primary">Create user</button>
+            <button type="button" class="btn btn-secondary" id="admin-new-user-cancel">Cancel</button>
           </div>
         </form>
-      </section>
+      </dialog>
+
+      <dialog id="admin-edit-user-dialog" class="admin-user-dialog" aria-labelledby="edit-user-heading">
+        <form method="post" action="/admin/users/" class="user-form" id="admin-edit-user-form" autocomplete="off">
+          <h2 id="edit-user-heading">Edit user</h2>
+          <div class="field">
+            <label for="edit-userid">User ID</label>
+            <input id="edit-userid" type="text" name="userid" required="required"/>
+          </div>
+          <div class="field">
+            <label for="edit-email">Email</label>
+            <input id="edit-email" type="email" name="email"/>
+          </div>
+          <div class="field">
+            <label for="edit-name">Name</label>
+            <input id="edit-name" type="text" name="name"/>
+          </div>
+          <div class="form-actions">
+            <button type="submit" class="btn btn-primary">Save</button>
+            <button type="button" class="btn btn-secondary" id="admin-edit-user-cancel">Cancel</button>
+          </div>
+        </form>
+      </dialog>
 
       <section class="admin-logs" aria-labelledby="admin-logs-heading">
         <div class="admin-logs-head">
@@ -1235,6 +1339,33 @@
               <label for="theme-name">Name</label>
               <input id="theme-name" type="text" name="name" required="required" value="{editor/@name}"/>
             </div>
+            <xsl:if test="overrides/color">
+              <fieldset class="color-overrides">
+                <legend>Colors</legend>
+                <div class="color-overrides-grid">
+                  <xsl:for-each select="overrides/color">
+                    <div class="field field-inline">
+                      <label>
+                        <xsl:attribute name="for">
+                          <xsl:text>theme-color-</xsl:text>
+                          <xsl:value-of select="@key"/>
+                        </xsl:attribute>
+                        <xsl:value-of select="@key"/>
+                      </label>
+                      <input type="color" class="theme-color-input" data-color-key="{@key}" value="{@value}">
+                        <xsl:attribute name="id">
+                          <xsl:text>theme-color-</xsl:text>
+                          <xsl:value-of select="@key"/>
+                        </xsl:attribute>
+                        <xsl:attribute name="aria-label">
+                          <xsl:value-of select="@key"/>
+                        </xsl:attribute>
+                      </input>
+                    </div>
+                  </xsl:for-each>
+                </div>
+              </fieldset>
+            </xsl:if>
             <div class="field field-checkbox">
               <input id="theme-published" type="checkbox" name="published" value="true">
                 <xsl:if test="editor/@published = 'true'">

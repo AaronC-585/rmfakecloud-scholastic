@@ -79,9 +79,9 @@
     var auth = global.useAuthState ? global.useAuthState() : { state: { user: null } };
     var user = auth.state && auth.state.user;
     if (user && typeof user === "object") {
-      return user.Email || user.email || user.UserID || user.userId || user.Name || user.name || "";
+      return user.Name || user.name || user.UserID || user.userId || user.ID || user.id || "";
     }
-    return document.body.dataset.email || document.body.dataset.user || "Account";
+    return document.body.dataset.name || document.body.dataset.user || "Account";
   }
 
   function UserSlot(props) {
@@ -104,7 +104,7 @@
       },
       [open]
     );
-    var email = accountLabel() || "Account";
+    var label = accountLabel() || "Account";
     return h(
       "div",
       { className: "shell-user-slot" + (props.className ? " " + props.className : "") + (open ? " is-open" : "") },
@@ -121,7 +121,7 @@
           },
         },
         h("span", { className: "icon icon-person", "aria-hidden": "true" }),
-        h("span", { className: "user-menu-name" }, String(email))
+        h("span", { className: "user-menu-name" }, String(label))
       ),
       open
         ? h(

@@ -37,7 +37,57 @@
       .catch(function () {});
   }
 
+  function wireDialogDismiss(dialog, cancelBtn) {
+    if (!dialog) return;
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", function () {
+        dialog.close();
+      });
+    }
+    dialog.addEventListener("click", function (e) {
+      if (e.target === dialog) dialog.close();
+    });
+  }
+
+  function initNewUserDialog() {
+    var dialog = document.getElementById("admin-new-user-dialog");
+    var openBtn = document.getElementById("admin-new-user-open");
+    var cancelBtn = document.getElementById("admin-new-user-cancel");
+    if (!dialog || !openBtn || !dialog.showModal) return;
+    openBtn.addEventListener("click", function () {
+      dialog.showModal();
+      var first = dialog.querySelector("input");
+      if (first) first.focus();
+    });
+    wireDialogDismiss(dialog, cancelBtn);
+  }
+
+  function initEditUserDialog() {
+    var dialog = document.getElementById("admin-edit-user-dialog");
+    var form = document.getElementById("admin-edit-user-form");
+    var cancelBtn = document.getElementById("admin-edit-user-cancel");
+    var useridInput = document.getElementById("edit-userid");
+    var emailInput = document.getElementById("edit-email");
+    var nameInput = document.getElementById("edit-name");
+    if (!dialog || !form || !dialog.showModal) return;
+
+    document.querySelectorAll(".admin-edit-user-open").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var id = btn.getAttribute("data-userid") || "";
+        form.action = "/admin/users/" + encodeURIComponent(id) + "/update";
+        if (useridInput) useridInput.value = id;
+        if (emailInput) emailInput.value = btn.getAttribute("data-email") || "";
+        if (nameInput) nameInput.value = btn.getAttribute("data-name") || "";
+        dialog.showModal();
+        if (useridInput) useridInput.focus();
+      });
+    });
+    wireDialogDismiss(dialog, cancelBtn);
+  }
+
   function init() {
+    initNewUserDialog();
+    initEditUserDialog();
     var pre = document.getElementById("admin-logs-view");
     if (!pre) return;
     pre.scrollTop = pre.scrollHeight;

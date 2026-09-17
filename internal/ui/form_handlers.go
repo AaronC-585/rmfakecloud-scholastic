@@ -8,7 +8,9 @@ import (
 	"net/url"
 	"path"
 	"strings"
+	"time"
 
+	"github.com/ddvk/rmfakecloud/internal/common"
 	"github.com/ddvk/rmfakecloud/internal/integrations"
 	"github.com/ddvk/rmfakecloud/internal/model"
 	"github.com/ddvk/rmfakecloud/internal/storage"
@@ -68,6 +70,10 @@ func (app *ReactAppWrapper) formLogin(c *gin.Context) {
 		c.Redirect(http.StatusSeeOther, "/login?error="+urlQuery("Invalid email or password")+"&email="+urlQuery(email))
 		return
 	}
+	if !user.PasswordLoginAllowed() {
+		c.Redirect(http.StatusSeeOther, "/login?error="+urlQuery("This account uses passkeys only. Sign in with a passkey.")+"&email="+urlQuery(email))
+		return
+	}
 	ok, err := user.CheckPassword(password)
 	if err != nil || !ok {
 		c.Redirect(http.StatusSeeOther, "/login?error="+urlQuery("Invalid email or password")+"&email="+urlQuery(email))
@@ -110,14 +116,7 @@ func (app *ReactAppWrapper) formProfileTheme(c *gin.Context) {
 		redirectFlash(c, "/profile", "error", "Unknown theme")
 		return
 	}
-	overrides := map[string]string{}
-	for k, vals := range c.Request.PostForm {
-		if strings.HasPrefix(k, "override-") && len(vals) > 0 && vals[0] != "" {
-			overrides[strings.TrimPrefix(k, "override-")] = vals[0]
-		}
-	}
 	user.ThemeID = themeID
-	user.ThemeColorOverrides = overrides
 	if err := app.userStorer.UpdateUser(user); err != nil {
 		redirectFlash(c, "/profile", "error", "Failed to save theme")
 		return
@@ -177,7 +176,53 @@ func (app *ReactAppWrapper) formPasskeyDelete(c *gin.Context) {
 		redirectFlash(c, "/profile", "error", "Failed to delete passkey")
 		return
 	}
+	if len(user.WebAuthnCredentials) == 0 {
+		redirectFlash(c, "/profile", "success", "Passkey deleted; password login re-enabled")
+		return
+	}
 	redirectFlash(c, "/profile", "success", "Passkey deleted")
+}
+
+func (app *ReactAppWrapper) formPasskeysOnly(c *gin.Context) {
+	u := app.requirePageUser(c)
+	if u == nil {
+		return
+	}
+	user := app.getModelUser(u.ID)
+	if user == nil {
+		redirectFlash(c, "/profile", "error", "User not found")
+		return
+	}
+	if !app.webAuthnEnabled() {
+		redirectFlash(c, "/profile", "error", "Passkeys are not enabled on this server")
+		return
+	}
+	want := false
+	for _, v := range c.PostFormArray("passkeysOnly") {
+		if v == "1" || strings.EqualFold(v, "on") || strings.EqualFold(v, "true") {
+			want = true
+			break
+		}
+	}
+	if want {
+		if len(user.WebAuthnCredentials) == 0 {
+			redirectFlash(c, "/profile", "error", "Register a passkey before enabling passkeys-only login")
+			return
+		}
+		user.PasskeysOnly = true
+	} else {
+		user.PasskeysOnly = false
+	}
+	user.UpdatedAt = time.Now()
+	if err := app.userStorer.UpdateUser(user); err != nil {
+		redirectFlash(c, "/profile", "error", "Failed to update login preference")
+		return
+	}
+	if user.PasskeysOnly {
+		redirectFlash(c, "/profile", "success", "Passkeys-only login enabled")
+		return
+	}
+	redirectFlash(c, "/profile", "success", "Password login enabled")
 }
 
 func (app *ReactAppWrapper) formReissueDevice(c *gin.Context) {
@@ -457,6 +502,131 @@ func (app *ReactAppWrapper) formDeleteUser(c *gin.Context) {
 	redirectFlash(c, "/admin", "success", "User deleted")
 }
 
+func (app *ReactAppWrapper) formUpdateUser(c *gin.Context) {
+	u := app.requirePageUser(c)
+	if u == nil || !u.Admin {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	oldID := c.Param("userid")
+	user, err := app.userStorer.GetUser(oldID)
+	if err != nil || user == nil {
+		redirectFlash(c, "/admin", "error", "User not found")
+		return
+	}
+	newID := common.SanitizeUid(strings.TrimSpace(c.PostForm("userid")))
+	email := strings.TrimSpace(c.PostForm("email"))
+	name := strings.TrimSpace(c.PostForm("name"))
+	if newID == "" || newID == "." || newID == ".." {
+		redirectFlash(c, "/admin", "error", "User ID required")
+		return
+	}
+	if newID != user.ID {
+		if oldID == u.ID {
+			redirectFlash(c, "/admin", "error", "Cannot change your own user ID while signed in")
+			return
+		}
+		if err := app.userStorer.RenameUser(user.ID, newID); err != nil {
+			redirectFlash(c, "/admin", "error", err.Error())
+			return
+		}
+		user.ID = newID
+	}
+	user.Email = email
+	user.Name = name
+	if err := app.userStorer.UpdateUser(user); err != nil {
+		redirectFlash(c, "/admin", "error", err.Error())
+		return
+	}
+	redirectFlash(c, "/admin", "success", "User updated")
+}
+
+func (app *ReactAppWrapper) formToggleAdmin(c *gin.Context) {
+	u := app.requirePageUser(c)
+	if u == nil || !u.Admin {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	targetID := c.Param("userid")
+	user, err := app.userStorer.GetUser(targetID)
+	if err != nil || user == nil {
+		redirectFlash(c, "/admin", "error", "User not found")
+		return
+	}
+	want := false
+	for _, v := range c.PostFormArray("admin") {
+		if v == "1" || strings.EqualFold(v, "on") || strings.EqualFold(v, "true") {
+			want = true
+			break
+		}
+	}
+	if targetID == u.ID && !want {
+		redirectFlash(c, "/admin", "error", "Cannot remove your own admin role")
+		return
+	}
+	user.IsAdmin = want
+	if err := app.userStorer.UpdateUser(user); err != nil {
+		redirectFlash(c, "/admin", "error", "Failed to update admin role")
+		return
+	}
+	if want {
+		redirectFlash(c, "/admin", "success", "Granted admin to "+user.ID)
+		return
+	}
+	redirectFlash(c, "/admin", "success", "Removed admin from "+user.ID)
+}
+
+func (app *ReactAppWrapper) formAdminPasskeysOnly(c *gin.Context) {
+	u := app.requirePageUser(c)
+	if u == nil || !u.Admin {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	if !app.webAuthnEnabled() {
+		redirectFlash(c, "/admin", "error", "Passkeys are not enabled on this server")
+		return
+	}
+	targetID := c.Param("userid")
+	user, err := app.userStorer.GetUser(targetID)
+	if err != nil || user == nil {
+		redirectFlash(c, "/admin", "error", "User not found")
+		return
+	}
+	want := false
+	for _, v := range c.PostFormArray("passkeysOnly") {
+		if v == "1" || strings.EqualFold(v, "on") || strings.EqualFold(v, "true") {
+			want = true
+			break
+		}
+	}
+	// Also accept action=enable|disable from admin buttons
+	switch strings.ToLower(strings.TrimSpace(c.PostForm("action"))) {
+	case "enable", "on", "true", "1":
+		want = true
+	case "disable", "off", "false", "0":
+		want = false
+	}
+	if want {
+		if len(user.WebAuthnCredentials) == 0 {
+			redirectFlash(c, "/admin", "error", "Cannot force passkeys-only: user has no registered passkeys")
+			return
+		}
+		user.PasskeysOnly = true
+	} else {
+		user.PasskeysOnly = false
+	}
+	user.UpdatedAt = time.Now()
+	if err := app.userStorer.UpdateUser(user); err != nil {
+		redirectFlash(c, "/admin", "error", "Failed to update user")
+		return
+	}
+	if user.PasskeysOnly {
+		redirectFlash(c, "/admin", "success", "Forced passkeys-only for "+user.ID)
+		return
+	}
+	redirectFlash(c, "/admin", "success", "Password login allowed for "+user.ID)
+}
+
 func (app *ReactAppWrapper) formCreateIntegration(c *gin.Context) {
 	u := app.requirePageUser(c)
 	if u == nil {
@@ -512,6 +682,40 @@ func (app *ReactAppWrapper) formDeleteIntegration(c *gin.Context) {
 		return
 	}
 	redirectFlash(c, "/integrations", "success", "Integration deleted")
+}
+
+func (app *ReactAppWrapper) formThemeOverrides(c *gin.Context) {
+	u := app.requirePageUser(c)
+	if u == nil || !u.Admin {
+		c.AbortWithStatus(http.StatusForbidden)
+		return
+	}
+	user := app.getModelUser(u.ID)
+	if user == nil {
+		redirectFlash(c, "/admin/themes", "error", "User not found")
+		return
+	}
+	if c.PostForm("clear") == "1" {
+		user.ThemeColorOverrides = nil
+		if err := app.userStorer.UpdateUser(user); err != nil {
+			redirectFlash(c, "/admin/themes", "error", "Failed to clear overrides")
+			return
+		}
+		redirectFlash(c, "/admin/themes", "success", "Color overrides cleared")
+		return
+	}
+	raw := map[string]string{}
+	for k, vals := range c.Request.PostForm {
+		if strings.HasPrefix(k, "override-") && len(vals) > 0 && vals[0] != "" {
+			raw[strings.TrimPrefix(k, "override-")] = vals[0]
+		}
+	}
+	user.ThemeColorOverrides = sanitizeColorOverrides(raw)
+	if err := app.userStorer.UpdateUser(user); err != nil {
+		redirectFlash(c, "/admin/themes", "error", "Failed to save overrides")
+		return
+	}
+	redirectFlash(c, "/admin/themes", "success", "Color overrides saved")
 }
 
 func (app *ReactAppWrapper) formSaveTheme(c *gin.Context) {

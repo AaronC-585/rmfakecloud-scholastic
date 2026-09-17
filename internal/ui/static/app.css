@@ -307,6 +307,13 @@ a:focus-visible {
   max-width: 16rem;
 }
 
+/* Web panel placard: no border around the profile name */
+.user-menu > summary {
+  border: 0;
+  padding-left: 0.25rem;
+  padding-right: 0.25rem;
+}
+
 .user-menu-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -504,6 +511,35 @@ textarea {
   border-radius: var(--rm-radius);
   padding: 0.75rem 1rem;
   margin: 0.75rem 0;
+}
+
+.color-overrides-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.65rem 1rem;
+}
+
+.color-overrides-grid .field-inline {
+  margin: 0;
+}
+
+.color-overrides-grid .field-inline label {
+  display: block;
+  font-size: 0.8rem;
+  margin-bottom: 0.2rem;
+}
+
+.color-overrides-grid input[type="color"] {
+  width: 100%;
+  min-height: 2.25rem;
+  padding: 0.15rem;
+  cursor: pointer;
+}
+
+@media (max-width: 640px) {
+  .color-overrides-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* ----- Login ----- */
@@ -2252,4 +2288,143 @@ body.has-js-shell .site-header,
   font-family: ui-monospace, "Cascadia Code", "SFMono-Regular", Menlo, Consolas, monospace;
   font-size: 0.8rem;
   line-height: 1.35;
+}
+
+.rm-files.is-dragover {
+  outline: 2px dashed var(--rm-action, #EE7B30);
+  outline-offset: -4px;
+}
+.rm-drop-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  padding: 1.5rem;
+  text-align: center;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--rm-fg-1, #f8f7f6);
+  background: color-mix(in srgb, var(--rm-bg-1, #1a1c1e) 55%, transparent);
+}
+.rm-drop-overlay[hidden] {
+  display: none;
+}
+.rm-files.is-uploading {
+  cursor: wait;
+}
+
+.passkeys-only-form {
+  margin-top: 1.25rem;
+}
+.passkeys-only-fieldset {
+  border: 1px solid color-mix(in srgb, var(--rm-fg-2) 22%, transparent);
+  border-radius: 0.25rem;
+  padding: 0.85rem 1rem 1rem;
+}
+.passkeys-only-fieldset legend {
+  padding: 0 0.35rem;
+  font-weight: 600;
+}
+.field-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+}
+.field-checkbox input[type="checkbox"] {
+  margin-top: 0.2rem;
+}
+.field-checkbox label {
+  font-weight: 500;
+}
+
+.admin-user-dialog {
+  border: 1px solid color-mix(in srgb, var(--rm-fg-2) 35%, transparent);
+  border-radius: var(--rm-radius);
+  background: var(--rm-bg-1);
+  color: var(--rm-fg-1);
+  padding: 1rem 1.15rem;
+  max-width: 22rem;
+  width: calc(100% - 2rem);
+}
+
+.admin-user-dialog::backdrop {
+  background: rgba(0, 0, 0, 0.35);
+}
+
+.admin-user-dialog h2 {
+  margin: 0 0 0.85rem;
+  font-size: 1.15rem;
+}
+
+.admin-user-dialog .form-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+}
+
+.admin-panel .rm-pager {
+  margin: 0.65rem 0 1rem;
+}
+
+.admin-user-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.gui-switch {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  gap: 0.35rem;
+}
+
+.gui-switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+}
+
+.gui-switch-track {
+  position: relative;
+  display: inline-block;
+  width: 2.5rem;
+  height: 1.35rem;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--rm-fg-2) 35%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rm-fg-2) 40%, transparent);
+  transition: background 0.15s ease;
+}
+
+.gui-switch-thumb {
+  position: absolute;
+  top: 0.12rem;
+  left: 0.12rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  background: var(--rm-bg-1);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  transition: transform 0.15s ease;
+}
+
+.gui-switch input:checked + .gui-switch-track {
+  background: color-mix(in srgb, var(--rm-accept) 70%, var(--rm-fg-2));
+  border-color: color-mix(in srgb, var(--rm-accept) 55%, transparent);
+}
+
+.gui-switch input:checked + .gui-switch-track .gui-switch-thumb {
+  transform: translateX(1.1rem);
+}
+
+.gui-switch input:focus-visible + .gui-switch-track {
+  outline: 2px solid var(--rm-action);
+  outline-offset: 2px;
 }

@@ -42,7 +42,7 @@ func exportInkLayerPNGSized(doc *models.HashDoc, ls *LocalBlobStorage, docid str
 	if err != nil || len(rmData) == 0 {
 		return rmdecode.RenderBlankNotebookPNG()
 	}
-	images := readPageImages(doc, ls, pageIDFromRmBlob(doc, ls, docid, pageNum))
+	images := filterValidPageImages(readPageImages(doc, ls, pageIDFromRmBlob(doc, ls, docid, pageNum)))
 	var b []byte
 	if pdfWPt >= 1 && pdfHPt >= 1 {
 		b, err = rmdecode.EncodeRmPageToPNGForPDFWithImages(rmData, images, pdfWPt, pdfHPt)
@@ -200,7 +200,7 @@ func (fs *FileSystemStorage) ExportPagePNG(uid, docid string, pageNum int) (io.R
 			return exportEpubPageCompositePNG(fs, uid, doc, ls, docid, pageNum)
 		}
 	default:
-		cachePath = path.Join(cacheDir, "renders", safeDoc, fmt.Sprintf("page-%d-thumb-v6-%s.bin", pageNum, docHash))
+		cachePath = path.Join(cacheDir, "renders", safeDoc, fmt.Sprintf("page-%d-thumb-v7-%s.bin", pageNum, docHash))
 		gen = func() ([]byte, error) {
 			b, _, e := exportNotebookPagePNGWithRmdecode(doc, ls, docid, pageNum)
 			return b, e
