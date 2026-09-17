@@ -34,10 +34,7 @@
     }
 
     function Pager() {
-      if (list.length <= pageSize && pageSize === defaultSize && list.length <= 10) {
-        // still show pager if more than page size
-      }
-      if (list.length === 0) return null;
+      if (list.length <= 10) return null;
       return RM.h(
         "div",
         { className: "rm-pager", role: "navigation", "aria-label": "Pagination" },
@@ -107,17 +104,36 @@
     opts = opts || {};
     var table = document.querySelector(tableSelector);
     if (!table || !table.tBodies || !table.tBodies[0]) return;
+    if (table.getAttribute("data-rm-paged") === "1") return;
     var tbody = table.tBodies[0];
-    var rows = Array.prototype.slice.call(tbody.rows);
+    var rows = Array.prototype.slice.call(tbody.rows).filter(function (row) {
+      return !row.querySelector("td[colspan]");
+    });
     if (!rows.length) return;
+
+    var minForPager = opts.minRows != null ? opts.minRows : 10;
     var pageSize = opts.pageSize || 10;
     try {
       var stored = parseInt(localStorage.getItem(STORAGE_KEY) || "", 10);
       if (stored === 5 || stored === 10 || stored === 25) pageSize = stored;
     } catch (_) {}
+
+    // Only show pagination when there are more than 10 listed rows.
+    if (rows.length <= minForPager) {
+      table.setAttribute("data-rm-paged", "1");
+      return;
+    }
+
+    table.setAttribute("data-rm-paged", "1");
     var page = 0;
     var host = document.createElement("div");
     host.className = "rm-pager";
+    host.setAttribute("role", "navigation");
+    host.setAttribute("aria-label", "Pagination");
+    // Bottom only: after the table (never insert a second copy).
+    var existing = table.parentNode.querySelector(".rm-pager[data-for-table='" + tableSelector + "']");
+    if (existing) existing.remove();
+    host.setAttribute("data-for-table", tableSelector);
     table.parentNode.insertBefore(host, table.nextSibling);
 
     function render() {
