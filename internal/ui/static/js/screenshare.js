@@ -394,7 +394,13 @@
         }),
       });
     } catch (e) {
-      setStatus(STATUS.ERROR, e.message || String(e));
+      cleanup();
+      // Async tablet join: offer timeout / room recycle should keep polling, not stick in ERROR.
+      if (disconnected) {
+        setStatus(STATUS.ERROR, e.message || String(e));
+      } else {
+        setStatus(STATUS.WAITING);
+      }
     }
   }
 

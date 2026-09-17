@@ -1124,6 +1124,16 @@ func (app *ReactAppWrapper) screenshareGetOffer(c *gin.Context) {
 		return
 	}
 
+	// Async tablet→browser: offer may already be buffered before we request.
+	if msgs := app.roomManager.PeekOfferMessages(roomID); len(msgs) > 0 {
+		c.JSON(http.StatusOK, gin.H{
+			"roomId":     roomID,
+			"messages":   msgs,
+			"iceServers": app.cfg.ICEServers,
+		})
+		return
+	}
+
 	app.roomManager.AddBroadcast(roomID, clientID, json.RawMessage(`{"type":"request-offer","clientId":"`+clientID+`"}`))
 
 	var inner map[string]interface{}
@@ -1145,8 +1155,12 @@ func (app *ReactAppWrapper) screenshareGetOffer(c *gin.Context) {
 		}
 	}
 
-	msgs := app.roomManager.WaitForMessages(roomID, 1, 30*time.Second)
+	msgs := app.roomManager.WaitForOffer(roomID, 30*time.Second)
 	if msgs == nil {
+		if !app.roomManager.RoomExists(roomID) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "room closed while waiting for offer"})
+			return
+		}
 		c.JSON(http.StatusGatewayTimeout, gin.H{"error": "timeout waiting for offer"})
 		return
 	}
