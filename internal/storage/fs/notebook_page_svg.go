@@ -25,7 +25,7 @@ func exportNotebookPageSVG(doc *models.HashDoc, ls *LocalBlobStorage, docid stri
 	if len(rmData) == 0 {
 		return []byte(rmdecode.RenderNotebookPlaceholderSVG()), false, nil
 	}
-	images := readPageImages(doc, ls, pageIDFromRmBlob(doc, ls, docid, pageNum))
+	images := filterValidPageImages(readPageImages(doc, ls, pageIDFromRmBlob(doc, ls, docid, pageNum)))
 	b, err := rmdecode.EncodeRmPageToSVGWithImages(rmData, images)
 	if err != nil {
 		log.Warn("notebook page svg: ", err)
@@ -80,7 +80,7 @@ func (fs *FileSystemStorage) ExportPageSVG(uid, docid string, pageNum int) (io.R
 	cacheDir := fs.getPathFromUser(uid, CacheDir)
 	_ = os.MkdirAll(cacheDir, 0700)
 	safeDoc := common.Sanitize(docid)
-	cachePath := path.Join(cacheDir, "renders", safeDoc, fmt.Sprintf("page-%d-svg-v2-%s.svg", pageNum, docHash))
+	cachePath := path.Join(cacheDir, "renders", safeDoc, fmt.Sprintf("page-%d-svg-v3-%s.svg", pageNum, docHash))
 	if docHash != "" {
 		if r, err := os.Open(cachePath); err == nil {
 			return r, nil
