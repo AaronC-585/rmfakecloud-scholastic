@@ -57,6 +57,9 @@ type User struct {
 	Integrations []IntegrationConfig
 	// WebAuthnCredentials are passkeys registered for the web UI.
 	WebAuthnCredentials []WebAuthnCredential `yaml:"webauthncredentials,omitempty"`
+	// PasskeysOnly disables password login for the web UI when true.
+	// Ignored (password allowed) if no passkeys are registered.
+	PasskeysOnly bool `yaml:"passkeysonly,omitempty"`
 	// RegisteredDevices are reMarkable clients that completed pairing (see newDevice).
 	RegisteredDevices []RegisteredDevice `yaml:"registereddevices,omitempty"`
 	// ThemeID is the selected shell theme (XML/XSLT). Empty means "default".

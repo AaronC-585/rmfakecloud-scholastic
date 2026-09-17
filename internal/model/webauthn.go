@@ -142,10 +142,25 @@ func (u *User) RemoveWebAuthnCredential(credID []byte) bool {
 	for i := range u.WebAuthnCredentials {
 		if bytes.Equal(u.WebAuthnCredentials[i].ID, credID) {
 			u.WebAuthnCredentials = append(u.WebAuthnCredentials[:i], u.WebAuthnCredentials[i+1:]...)
+			if len(u.WebAuthnCredentials) == 0 {
+				u.PasskeysOnly = false
+			}
 			return true
 		}
 	}
 	return false
+}
+
+// PasswordLoginAllowed reports whether email/password web login is permitted.
+// Passkeys-only is enforced only when at least one passkey is registered.
+func (u *User) PasswordLoginAllowed() bool {
+	if u == nil {
+		return false
+	}
+	if !u.PasskeysOnly {
+		return true
+	}
+	return len(u.WebAuthnCredentials) == 0
 }
 
 // FindUserByWebAuthnHandle finds a user whose WebAuthnID matches userHandle.

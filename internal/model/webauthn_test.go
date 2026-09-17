@@ -92,3 +92,31 @@ func TestWebAuthnUserInterface(t *testing.T) {
 		t.Fatal("expected empty credentials")
 	}
 }
+
+func TestPasswordLoginAllowed(t *testing.T) {
+	u := &User{PasskeysOnly: true}
+	if !u.PasswordLoginAllowed() {
+		t.Fatal("passkeys-only with no creds should still allow password")
+	}
+	u.WebAuthnCredentials = []WebAuthnCredential{{ID: []byte("a")}}
+	if u.PasswordLoginAllowed() {
+		t.Fatal("passkeys-only with creds should block password")
+	}
+	u.PasskeysOnly = false
+	if !u.PasswordLoginAllowed() {
+		t.Fatal("flag off should allow password")
+	}
+}
+
+func TestRemoveLastPasskeyClearsPasskeysOnly(t *testing.T) {
+	u := &User{
+		PasskeysOnly:        true,
+		WebAuthnCredentials: []WebAuthnCredential{{ID: []byte("a")}},
+	}
+	if !u.RemoveWebAuthnCredential([]byte("a")) {
+		t.Fatal("expected remove")
+	}
+	if u.PasskeysOnly {
+		t.Fatal("PasskeysOnly should clear when last passkey removed")
+	}
+}
